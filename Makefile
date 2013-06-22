@@ -192,7 +192,8 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
 # Default value for CROSS_COMPILE is not to prefix executables
 # Note: Some architectures assign CROSS_COMPILE in their arch/*/Makefile
 export KBUILD_BUILDHOST := $(SUBARCH)
-ARCH		?= arm
+ARCH		?= $(SUBARCH)
+CROSS_COMPILE	?= $(CONFIG_CROSS_COMPILE:"%"=%)
 
 # Architecture as present in compile.h
 UTS_MACHINE 	:= $(ARCH)
@@ -350,16 +351,20 @@ MODFLAGS	= -DMODULE \
 		  -march=armv7-a \
 		  -mfpu=neon \
 		  -mtune=cortex-a9 \
-		  -O2 \
-      -Wno-sizeof-pointer-memaccess
+		  -O3
+ifdef CONFIG_GCC_48_FIXES
+  MODFLAGS	+=	-Wno-sizeof-pointer-memaccess
+endif
 CFLAGS_MODULE   = $(MODFLAGS)
 AFLAGS_MODULE   = $(MODFLAGS)
 LDFLAGS_MODULE  = -T $(srctree)/scripts/module-common.lds
 CFLAGS_KERNEL	= -march=armv7-a \
 		  -mfpu=neon \
 		  -mtune=cortex-a9 \
-		  -O2 \
-      -Wno-sizeof-pointer-memaccess
+		  -O2
+ifdef CONFIG_GCC_48_FIXES
+  CFLAGS_KERNEL	+=	-Wno-sizeof-pointer-memaccess
+endif
 AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
@@ -371,14 +376,19 @@ LINUXINCLUDE    := -I$(srctree)/arch/$(hdr-arch)/include \
                    $(if $(KBUILD_SRC), -I$(srctree)/include) \
                    -include $(srctree)/include/linux/kconfig.h
 
-KBUILD_CPPFLAGS := -D__KERNEL__ \
-       -Wno-sizeof-pointer-memaccess
+KBUILD_CPPFLAGS := -D__KERNEL__
+
+ifdef CONFIG_GCC_48_FIXES
+  KBUILD_CPPFLAGS	+=	-Wno-sizeof-pointer-memaccess
+endif
 KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-		   -fno-delete-null-pointer-checks \
-       -Wno-sizeof-pointer-memaccess
+		   -fno-delete-null-pointer-checks
+ifdef CONFIG_GCC_48_FIXES
+  KBUILD_CFLAGS	+=	-Wno-sizeof-pointer-memaccess
+endif
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
@@ -570,8 +580,10 @@ all: vmlinux
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os
-KBUILD_CFLAGS	+=	-Wno-maybe-uninitialized \
+  ifdef CONFIG_GCC_48_OPTIMIZE
+    KBUILD_CFLAGS	+=	-Wno-maybe-uninitialized \
 				-Wno-sizeof-pointer-memaccess
+  endif
 else
 KBUILD_CFLAGS	+= -O3
 endif
@@ -606,6 +618,9 @@ endif
 
 ifdef CONFIG_DEBUG_INFO
 KBUILD_CFLAGS	+= -g
+ifdef CONFIG_GCC_48_FIXES
+KBUILD_CFLAGS	+= -gdwarf-2
+endif
 KBUILD_AFLAGS	+= -gdwarf-2
 endif
 
