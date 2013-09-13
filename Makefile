@@ -2,7 +2,7 @@ VERSION = 3
 PATCHLEVEL = 1
 SUBLEVEL = 10
 EXTRAVERSION = +
-NAME = "Divemaster Edition"
+NAME = kecinzer edition
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
@@ -192,8 +192,8 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
 # Default value for CROSS_COMPILE is not to prefix executables
 # Note: Some architectures assign CROSS_COMPILE in their arch/*/Makefile
 export KBUILD_BUILDHOST := $(SUBARCH)
-ARCH		?= arm
-CROSS_COMPILE ?= $(CCACHE) $(CONFIG_CROSS_COMPILE:"%"=%)
+ARCH		?= $(SUBARCH)
+CROSS_COMPILE	?= $(CCACHE) $(CONFIG_CROSS_COMPILE:"%"=%)
 
 # Architecture as present in compile.h
 UTS_MACHINE 	:= $(ARCH)
@@ -330,7 +330,7 @@ include $(srctree)/scripts/Kbuild.include
 
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
-CC		= $(CROSS_COMPILE)gcc
+CC		= $(CCACHE) $(CROSS_COMPILE)gcc
 CPP		= $(CC) -E
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
@@ -347,10 +347,24 @@ CHECK		= sparse
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
-CFLAGS_MODULE   = -fno-pic
-AFLAGS_MODULE   =
-LDFLAGS_MODULE  =
-CFLAGS_KERNEL	=
+MODFLAGS	= -DMODULE \
+		  -march=armv7-a \
+		  -mfpu=neon \
+		  -mtune=cortex-a9 \
+		  -O3
+ifdef CONFIG_GCC_48_FIXES
+  MODFLAGS	+=	-Wno-sizeof-pointer-memaccess
+endif
+CFLAGS_MODULE   = $(MODFLAGS)
+AFLAGS_MODULE   = $(MODFLAGS)
+LDFLAGS_MODULE  = -T $(srctree)/scripts/module-common.lds
+CFLAGS_KERNEL	= -march=armv7-a \
+		  -mfpu=neon \
+		  -mtune=cortex-a9 \
+		  -O2
+ifdef CONFIG_GCC_48_FIXES
+  CFLAGS_KERNEL	+=	-Wno-sizeof-pointer-memaccess
+endif
 AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
@@ -364,19 +378,17 @@ LINUXINCLUDE    := -I$(srctree)/arch/$(hdr-arch)/include \
 
 KBUILD_CPPFLAGS := -D__KERNEL__
 
-CFLAGS_A9 = -march=armv7-a -mtune=cortex-a9 -mfpu=neon -funsafe-math-optimizations
-CFLAGS_MODULO = -fmodulo-sched -fmodulo-sched-allow-regmoves
-KERNEL_MODS = $(CFLAGS_A9) $(CFLAGS_MODULO)
-
+ifdef CONFIG_GCC_48_FIXES
+  KBUILD_CPPFLAGS	+=	-Wno-sizeof-pointer-memaccess
+endif
 KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-		   -fno-delete-null-pointer-checks \
-       -ftree-vectorize \
-       -mno-unaligned-access \
-       $(KERNEL_MODS)
-
+		   -fno-delete-null-pointer-checks
+ifdef CONFIG_GCC_48_FIXES
+  KBUILD_CFLAGS	+=	-Wno-sizeof-pointer-memaccess
+endif
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
@@ -568,6 +580,10 @@ all: vmlinux
 
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os
+  ifdef CONFIG_GCC_48_OPTIMIZE
+    KBUILD_CFLAGS	+=	-Wno-maybe-uninitialized \
+				-Wno-sizeof-pointer-memaccess
+  endif
 else
 KBUILD_CFLAGS	+= -O3
 KBUILD_CFLAGS += $(call cc-disable-warning,maybe-uninitialized)
@@ -604,6 +620,9 @@ endif
 
 ifdef CONFIG_DEBUG_INFO
 KBUILD_CFLAGS	+= -g
+ifdef CONFIG_GCC_48_FIXES
+KBUILD_CFLAGS	+= -gdwarf-2
+endif
 KBUILD_AFLAGS	+= -gdwarf-2
 endif
 
